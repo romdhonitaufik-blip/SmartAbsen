@@ -1,4 +1,4 @@
-# HR-Presensi & Manajemen Izin, Sakit, dan Cuti Karyawan
+# SmartAbsen & Manajemen Izin, Sakit, dan Cuti Karyawan
 
 Aplikasi Web Modern untuk Manajemen Kehadiran (Absensi), Pengajuan Izin, Sakit, dan Cuti Karyawan berbasis Web (Client-Side Reactive SPA) yang siap digunakan langsung tanpa konfigurasi server tambahan.
 
