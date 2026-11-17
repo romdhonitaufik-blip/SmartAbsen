@@ -6,35 +6,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmartAbsen - PT ANUGERAH BERKAH INDUSTRI</title>
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS Configuration & CDN -->
   <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af'
+    window.tailwind = {
+      config: {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#eff6ff',
+                100: '#dbeafe',
+                500: '#3b82f6',
+                600: '#2563eb',
+                700: '#1d4ed8',
+                800: '#1e40af'
+              }
             }
           }
         }
       }
-    }
+    };
   </script>
+  <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Google Font & Custom Styles -->
   <link rel="stylesheet" href="assets/css/style.css">
 
-  <!-- Canvas Confetti for Celebrations -->
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
-  <!-- html2pdf.js for 1-Click PDF Generation -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- Canvas Confetti & html2pdf (Non-blocking defer) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 
 <body class="bg-slate-50 min-h-screen text-slate-800 antialiased selection:bg-blue-500 selection:text-white">
@@ -58,8 +58,8 @@
   <div id="modal-container" class="no-print"></div>
 
   <!-- Scripts -->
-  <script src="assets/js/dummy-data.js?v=20261117_v4"></script>
-  <script src="assets/js/app.js?v=20261117_v4"></script>
+  <script src="assets/js/dummy-data.js?v=20261117_v5"></script>
+  <script src="assets/js/app.js?v=20261117_v5"></script>
 </body>
 
 </html>
