@@ -147,6 +147,14 @@ function clearAllAttendances(notify = true) {
 }
 window.clearAllAttendances = clearAllAttendances;
 
+function clearAllRequests(notify = true) {
+  state.requests = [];
+  saveDatabase();
+  if (notify) showToast('Seluruh riwayat pengajuan cuti & izin berhasil dikosongkan.', 'success');
+  renderApp();
+}
+window.clearAllRequests = clearAllRequests;
+
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -156,7 +164,7 @@ function loadSession() {
         const emp = state.employees.find(e => e.id === sess.id);
         if (emp) {
           state.currentUser = emp;
-          state.currentRole = sess.role || emp.role;
+          state.currentRole = (emp.role === 'admin') ? (sess.role || 'admin') : 'employee';
           state.currentTab = state.currentRole === 'admin' ? 'dashboard' : 'attendance';
         }
       }
@@ -1988,24 +1996,31 @@ function renderMainApp() {
             </div>
           </div>
 
-          <!-- Central Role Switcher Pill -->
-          <div class="flex items-center bg-slate-200/80 p-1 rounded-xl text-xs font-semibold">
-            <button type="button" data-action="switch-role" data-role="employee"
-              class="px-3.5 py-1.5 rounded-lg transition-all duration-200 flex items-center space-x-1.5 ${isEmployee ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span>Mode Karyawan</span>
-            </button>
-            <button type="button" data-action="switch-role" data-role="admin"
-              class="px-3.5 py-1.5 rounded-lg transition-all duration-200 flex items-center space-x-1.5 relative ${!isEmployee ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              <span>Mode Admin / HRD</span>
-              ${pendingCount > 0 ? `<span class="w-2 h-2 rounded-full bg-rose-500 absolute top-1 right-1"></span>` : ''}
-            </button>
-          </div>
+          <!-- Central Role Switcher Pill (Hanya untuk Admin) -->
+          ${state.currentUser && state.currentUser.role === 'admin' ? `
+            <div class="flex items-center bg-slate-200/80 p-1 rounded-xl text-xs font-semibold">
+              <button type="button" data-action="switch-role" data-role="employee"
+                class="px-3.5 py-1.5 rounded-lg transition-all duration-200 flex items-center space-x-1.5 ${isEmployee ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>Mode Karyawan</span>
+              </button>
+              <button type="button" data-action="switch-role" data-role="admin"
+                class="px-3.5 py-1.5 rounded-lg transition-all duration-200 flex items-center space-x-1.5 relative ${!isEmployee ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                <span>Mode Admin / HRD</span>
+                ${pendingCount > 0 ? `<span class="w-2 h-2 rounded-full bg-rose-500 absolute top-1 right-1"></span>` : ''}
+              </button>
+            </div>
+          ` : `
+            <div class="hidden sm:flex items-center space-x-2 px-3.5 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 rounded-full text-xs font-bold">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>Portal Karyawan</span>
+            </div>
+          `}
 
           <!-- User Profile & Logout -->
           <div class="flex items-center space-x-3">
@@ -2039,15 +2054,15 @@ function renderMainApp() {
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               <span>Presensi Kehadiran</span>
             </button>
+            <button type="button" data-action="switch-tab" data-tab="history"
+              class="py-3 px-1 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-colors ${state.currentTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              <span>Riwayat Absen & Rekapan Lembur Saya</span>
+            </button>
             <button type="button" data-action="switch-tab" data-tab="requests"
               class="py-3 px-1 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-colors ${state.currentTab === 'requests' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
               <span>Pengajuan Izin & Cuti</span>
-            </button>
-            <button type="button" data-action="switch-tab" data-tab="history"
-              class="py-3 px-1 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-colors ${state.currentTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-              <span>Riwayat Absensi Saya</span>
             </button>
           ` : `
             <button type="button" data-action="switch-tab" data-tab="dashboard"
@@ -2102,11 +2117,19 @@ function renderMainApp() {
 
 // Dispatcher for Active Tab
 function renderActiveTabContent() {
+  const isAdmin = !!(state.currentUser && state.currentUser.role === 'admin');
+  if (!isAdmin) {
+    state.currentRole = 'employee';
+    if (!['attendance', 'requests', 'history'].includes(state.currentTab)) {
+      state.currentTab = 'attendance';
+    }
+  }
+
   if (state.currentRole === 'employee') {
     switch (state.currentTab) {
       case 'attendance': return renderEmployeeAttendanceTab();
-      case 'requests': return renderEmployeeRequestsTab();
       case 'history': return renderEmployeeHistoryTab();
+      case 'requests': return renderEmployeeRequestsTab();
       default: return renderEmployeeAttendanceTab();
     }
   } else {
@@ -2486,6 +2509,7 @@ function renderEmployeeRequestsTab() {
                 <th class="py-2.5 px-3">Alasan</th>
                 <th class="py-2.5 px-3">Status</th>
                 <th class="py-2.5 px-3">Catatan HRD</th>
+                <th class="py-2.5 px-3 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2507,10 +2531,17 @@ function renderEmployeeRequestsTab() {
                     </span>
                   </td>
                   <td class="py-3 px-3 text-slate-500 italic">${escapeHtml(r.reviewNotes || '-')}</td>
+                  <td class="py-3 px-3 text-center whitespace-nowrap">
+                    <button type="button" data-action="delete-request" data-id="${r.id}"
+                      class="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 rounded-lg border border-rose-200 hover:border-rose-600 transition inline-flex items-center space-x-1 cursor-pointer">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      <span>Hapus</span>
+                    </button>
+                  </td>
                 </tr>
               `).join('') : `
                 <tr>
-                  <td colspan="6" class="py-8 text-center text-slate-400">Belum ada pengajuan izin atau cuti.</td>
+                  <td colspan="7" class="py-8 text-center text-slate-400">Belum ada pengajuan izin atau cuti.</td>
                 </tr>
               `}
             </tbody>
@@ -2879,6 +2910,10 @@ function renderAdminApprovalsTab() {
                       class="flex-1 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer">
                       ✕ Tolak
                     </button>
+                    <button type="button" data-action="delete-request" data-id="${req.id}" title="Hapus Pengajuan"
+                      class="p-2 bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 rounded-xl text-xs font-bold transition cursor-pointer">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    </button>
                   </div>
                 </div>
               `;
@@ -2907,6 +2942,7 @@ function renderAdminApprovalsTab() {
                 <th class="py-2.5 px-3">Status</th>
                 <th class="py-2.5 px-3">Ditinjau Oleh</th>
                 <th class="py-2.5 px-3">Catatan HRD</th>
+                <th class="py-2.5 px-3 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
@@ -2925,11 +2961,18 @@ function renderAdminApprovalsTab() {
                     </td>
                     <td class="py-3 px-3 text-slate-500">${escapeHtml(r.reviewedBy || 'HRD')}</td>
                     <td class="py-3 px-3 text-slate-600 italic">${escapeHtml(r.reviewNotes || '-')}</td>
+                    <td class="py-3 px-3 text-center whitespace-nowrap">
+                      <button type="button" data-action="delete-request" data-id="${r.id}"
+                        class="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:text-white bg-rose-50 hover:bg-rose-600 rounded-lg border border-rose-200 hover:border-rose-600 transition inline-flex items-center space-x-1 cursor-pointer">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        <span>Hapus</span>
+                      </button>
+                    </td>
                   </tr>
                 `;
   }).join('') : `
                 <tr>
-                  <td colspan="6" class="py-6 text-center text-slate-400">Belum ada riwayat persetujuan.</td>
+                  <td colspan="7" class="py-6 text-center text-slate-400">Belum ada riwayat persetujuan.</td>
                 </tr>
               `}
             </tbody>
@@ -3666,6 +3709,12 @@ function renderAdminSettingsTab() {
               <span>Kosongkan Seluruh Log Absen & Lembur (0 Jam)</span>
             </button>
 
+            <button type="button" data-action="clear-all-requests"
+              class="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer shadow-md shadow-amber-500/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <span>Kosongkan Seluruh Riwayat Pengajuan Cuti / Izin</span>
+            </button>
+
             <button type="button" data-action="reset-demo-data"
               class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -3896,6 +3945,14 @@ function setupEventListeners() {
       }
       case 'switch-role': {
         const newRole = target.getAttribute('data-role');
+        if (newRole === 'admin' && (!state.currentUser || state.currentUser.role !== 'admin')) {
+          showToast('Akses ditolak: Hanya akun Administrator yang memiliki akses ini.', 'error');
+          state.currentRole = 'employee';
+          state.currentTab = 'attendance';
+          saveSession();
+          renderApp();
+          break;
+        }
         state.currentRole = newRole;
         state.currentTab = newRole === 'admin' ? 'dashboard' : 'attendance';
         saveSession();
@@ -4057,6 +4114,29 @@ function setupEventListeners() {
           state.attendances = [];
           saveDatabase();
           showToast('Seluruh riwayat presensi & log lembur berhasil dikosongkan (0 Jam).', 'success');
+          renderApp();
+        }
+        break;
+      }
+      case 'delete-request': {
+        const reqId = target.getAttribute('data-id');
+        const req = state.requests.find(r => r.id === reqId);
+        if (!req) break;
+        const emp = getEmployee(req.employeeId);
+        const empName = emp ? emp.name : 'ini';
+        if (confirm(`Apakah Anda yakin ingin menghapus data pengajuan ${req.type} milik ${empName} (${req.startDate} s/d ${req.endDate})?`)) {
+          state.requests = state.requests.filter(r => r.id !== reqId);
+          saveDatabase();
+          showToast('Riwayat pengajuan berhasil dihapus.', 'info');
+          renderApp();
+        }
+        break;
+      }
+      case 'clear-all-requests': {
+        if (confirm('PERINGATAN:\nApakah Anda yakin ingin MENGHAPUS SEMUA riwayat pengajuan cuti & izin?\n\nSemua data permohonan izin/cuti akan dihapus bersih.\n\nTindakan ini tidak dapat dibatalkan.')) {
+          state.requests = [];
+          saveDatabase();
+          showToast('Seluruh riwayat pengajuan cuti/izin berhasil dikosongkan.', 'success');
           renderApp();
         }
         break;

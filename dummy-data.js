@@ -4,6 +4,7 @@
 
 const DEFAULT_OFFICE_SETTINGS = {
   companyName: "PT ANUGERAH BERKAH INDUSTRI",
+  companyLogo: "logo.jpg",
   workStart: "07:50",
   workEnd: "17:00",
   officeLatitude: -6.243679,      // Masukkan Latitude kantor Anda
@@ -610,58 +611,6 @@ function generateSeedAttendances() {
   return attendances;
 }
 
-const DEFAULT_ATTENDANCES = generateSeedAttendances();
+const DEFAULT_ATTENDANCES = []; // Dikosongkan (0 Jam Lembur) agar bersih untuk operasional karyawan asli PT ABI
 
-const DEFAULT_REQUESTS = [
-  {
-    id: "REQ-2001",
-    employeeId: "ABR-002",
-    type: "IZIN",
-    category: "Keperluan Pribadi / Keluarga",
-    startDate: getRecentDate(0),
-    endDate: getRecentDate(0),
-    totalDays: 1,
-    reason: "Menghadiri perpanjangan paspor dan urusan perbankan penting keluarga.",
-    attachment: null,
-    emergencyContact: "081299887766 (Keluarga)",
-    status: "PENDING",
-    submittedAt: `${getRecentDate(0)} 07:30:00`,
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNotes: null
-  },
-  {
-    id: "REQ-2002",
-    employeeId: "ABR-003",
-    type: "SAKIT",
-    category: "Rawat Jalan (Demam/Flu)",
-    startDate: getRecentDate(1),
-    endDate: getRecentDate(0),
-    totalDays: 2,
-    reason: "Demam tinggi 38.5C dan anjuran dokter istirahat total 2 hari.",
-    attachment: "https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=400&auto=format&fit=crop&q=80",
-    emergencyContact: "081377889900 (Orang Tua)",
-    status: "APPROVED",
-    submittedAt: `${getRecentDate(1)} 08:00:00`,
-    reviewedBy: "ABR-024",
-    reviewedAt: `${getRecentDate(1)} 09:15:00`,
-    reviewNotes: "Surat dokter terlampir valid. Semoga lekas pulih."
-  },
-  {
-    id: "REQ-2003",
-    employeeId: "ABR-001",
-    type: "CUTI",
-    category: "Cuti Tahunan",
-    startDate: getRecentDate(-2),
-    endDate: getRecentDate(-4),
-    totalDays: 3,
-    reason: "Menghadiri resepsi pernikahan adik kandung di Yogyakarta.",
-    attachment: null,
-    emergencyContact: "081288776655 (Istri)",
-    status: "PENDING",
-    submittedAt: `${getRecentDate(0)} 10:00:00`,
-    reviewedBy: null,
-    reviewedAt: null,
-    reviewNotes: null
-  }
-];
+const DEFAULT_REQUESTS = []; // Dikosongkan agar bersih untuk operasional karyawan asli PT ABI
