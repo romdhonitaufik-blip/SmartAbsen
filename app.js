@@ -3411,6 +3411,7 @@ function renderAdminReportsTab() {
                   <th class="py-2.5 px-3">Status</th>
                   <th class="py-2.5 px-3 no-print">Foto Selfie</th>
                   <th class="py-2.5 px-3">Lokasi GPS</th>
+                  <th class="py-2.5 px-3 text-center no-print">Aksi</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100 font-medium text-slate-700">
@@ -3457,11 +3458,18 @@ function renderAdminReportsTab() {
                       <td class="py-3 px-3 text-slate-500 max-w-xs truncate" title="${escapeHtml(r.clockInLocation ? r.clockInLocation.address : '-')}">
                         ${escapeHtml(r.clockInLocation ? r.clockInLocation.address : '-')}
                       </td>
+                      <td class="py-3 px-3 text-center no-print whitespace-nowrap">
+                        <button type="button" data-action="delete-attendance" data-id="${r.id}"
+                          title="Hapus baris log ini"
+                          class="px-2 py-1 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 rounded-lg transition border border-rose-200 cursor-pointer">
+                          Hapus
+                        </button>
+                      </td>
                     </tr>
                   `;
   }).join('') : `
                   <tr>
-                    <td colspan="11" class="py-8 text-center text-slate-400">Tidak ada data yang sesuai filter pencarian.</td>
+                    <td colspan="12" class="py-8 text-center text-slate-400">Tidak ada data yang sesuai filter pencarian.</td>
                   </tr>
                 `}
               </tbody>
@@ -3615,9 +3623,15 @@ function renderAdminSettingsTab() {
               <input type="file" accept=".json" class="hidden" id="json-restore-input">
             </label>
 
+            <button type="button" data-action="clear-all-attendances"
+              class="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer shadow-md shadow-rose-500/20">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <span>Kosongkan Seluruh Log Absen & Lembur (0 Jam)</span>
+            </button>
+
             <button type="button" data-action="reset-demo-data"
               class="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
               <span>Reset ke Data Demo Bawaan</span>
             </button>
           </div>
@@ -3986,6 +4000,28 @@ function setupEventListeners() {
       }
       case 'backup-json': {
         exportDatabaseJSON();
+        break;
+      }
+      case 'delete-attendance': {
+        const attId = target.getAttribute('data-id');
+        const att = state.attendances.find(a => a.id === attId);
+        const emp = att ? getEmployee(att.employeeId) : null;
+        const empName = emp ? emp.name : 'ini';
+        if (confirm(`Apakah Anda yakin ingin menghapus data presensi & log lembur milik ${empName} (Tanggal: ${att ? att.date : ''})?`)) {
+          state.attendances = state.attendances.filter(a => a.id !== attId);
+          saveDatabase();
+          showToast('Log presensi & lemburan berhasil dihapus.', 'info');
+          renderApp();
+        }
+        break;
+      }
+      case 'clear-all-attendances': {
+        if (confirm('PERINGATAN:\nApakah Anda yakin ingin MENGHAPUS SEMUA riwayat presensi & log lemburan?\n\nSeluruh rekapitulasi lembur 34 karyawan akan kembali menjadi 0 Jam (bersih untuk operasional asli).\n\nTindakan ini tidak dapat dibatalkan.')) {
+          state.attendances = [];
+          saveDatabase();
+          showToast('Seluruh riwayat presensi & log lembur berhasil dikosongkan (0 Jam).', 'success');
+          renderApp();
+        }
         break;
       }
       case 'reset-demo-data': {
