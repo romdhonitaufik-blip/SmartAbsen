@@ -18,6 +18,7 @@ const state = {
   requests: [],
   officeSettings: {
     companyName: 'PT ANUGERAH BERKAH INDUSTRI',
+    companyLogo: 'logo.jpg',
     workStart: '08:00',
     workEnd: '17:00',
     officeLatitude: -6.2088,
@@ -87,7 +88,10 @@ function loadDatabase() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed.officeSettings) state.officeSettings = { ...state.officeSettings, ...parsed.officeSettings };
+      if (parsed.officeSettings) {
+        state.officeSettings = { ...state.officeSettings, ...parsed.officeSettings };
+        if (!state.officeSettings.companyLogo) state.officeSettings.companyLogo = 'logo.jpg';
+      }
       if (Array.isArray(parsed.employees) && parsed.employees.length >= 30) {
         state.employees = parsed.employees;
       } else {
@@ -1366,9 +1370,12 @@ function exportReportsToPDF() {
     container.innerHTML = `
       <div style="border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <h1 style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin: 0;">${escapeHtml(state.officeSettings.companyName)}</h1>
-            <p style="font-size: 11px; color: #475569; margin: 2px 0;">Sistem Manajemen HR & Rekapitulasi Jam Lembur Karyawan</p>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <img src="logo.jpg" style="height: 48px; width: 48px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; padding: 2px;" onerror="if(this.src.indexOf('logo.png') === -1) { this.src = 'logo.png'; }">
+            <div>
+              <h1 style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin: 0;">${escapeHtml(state.officeSettings.companyName)}</h1>
+              <p style="font-size: 11px; color: #475569; margin: 2px 0;">Sistem Manajemen HR & Rekapitulasi Jam Lembur Karyawan</p>
+            </div>
           </div>
           <div style="text-align: right;">
             <div style="font-size: 13px; font-weight: bold; color: #b45309;">REKAPITULASI LEMBUR PER ORANG</div>
@@ -1497,9 +1504,12 @@ function exportReportsToPDF() {
   container.innerHTML = `
     <div style="border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 16px;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <h1 style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin: 0;">${escapeHtml(state.officeSettings.companyName)}</h1>
-          <p style="font-size: 11px; color: #475569; margin: 2px 0;">Sistem Manajemen HR & Rekapitulasi Presensi Karyawan</p>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <img src="logo.jpg" style="height: 48px; width: 48px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; padding: 2px;" onerror="if(this.src.indexOf('logo.png') === -1) { this.src = 'logo.png'; }">
+          <div>
+            <h1 style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin: 0;">${escapeHtml(state.officeSettings.companyName)}</h1>
+            <p style="font-size: 11px; color: #475569; margin: 2px 0;">Sistem Manajemen HR & Rekapitulasi Presensi Karyawan</p>
+          </div>
         </div>
         <div style="text-align: right;">
           <div style="font-size: 13px; font-weight: bold; color: #1d4ed8;">REKAPITULASI PRESENSI & LEMBUR</div>
@@ -1852,10 +1862,12 @@ function renderLoginScreen() {
         <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 p-6 text-white text-center relative overflow-hidden">
           <div class="absolute -right-6 -bottom-6 w-28 h-28 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
           
-          <div class="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-3 shadow-lg border border-white/20">
-            <svg class="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div class="w-20 h-20 rounded-2xl bg-white p-2 flex items-center justify-center mx-auto mb-3 shadow-xl border border-white/40 overflow-hidden" style="width: 80px; height: 80px;">
+            <img src="${escapeHtml(state.officeSettings.companyLogo || 'logo.jpg')}" 
+              alt="Logo PT ABI" 
+              style="width: 100%; height: 100%; object-fit: contain;"
+              class="w-full h-full object-contain"
+              onerror="if(this.src.indexOf('logo.png') === -1) { this.src = 'logo.png'; }">
           </div>
 
           <h2 class="text-xl font-black tracking-tight">Portal SmartAbsen</h2>
@@ -1963,10 +1975,12 @@ function renderMainApp() {
           
           <!-- Logo & Brand -->
           <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+            <div class="w-11 h-11 rounded-xl bg-white flex items-center justify-center shadow-xs p-1 border border-slate-200 overflow-hidden shrink-0" style="width: 44px; height: 44px;">
+              <img src="${escapeHtml(state.officeSettings.companyLogo || 'logo.jpg')}" 
+                alt="Logo PT ABI" 
+                style="width: 100%; height: 100%; object-fit: contain;"
+                class="w-full h-full object-contain"
+                onerror="if(this.src.indexOf('logo.png') === -1) { this.src = 'logo.png'; }">
             </div>
             <div>
               <h1 class="text-lg font-bold text-slate-900 leading-tight">SmartAbsen</h1>
@@ -3523,6 +3537,14 @@ function renderAdminSettingsTab() {
                 class="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-bold text-xs">
             </div>
 
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Logo Perusahaan (URL Gambar atau Nama File, misal: logo.png)</label>
+              <input type="text" id="set-company-logo" value="${escapeHtml(set.companyLogo || '')}"
+                placeholder="Contoh: logo.png atau https://link-gambar.com/logo.png"
+                class="w-full bg-white border border-slate-300 rounded-xl p-2.5 text-xs font-mono">
+              <p class="text-[10px] text-slate-400 mt-1">Masukkan URL gambar atau letakkan file gambar di folder proyek (misal: <code>logo.png</code>). Kosongkan jika ingin memakai ikon jam standar.</p>
+            </div>
+
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block font-bold text-slate-700 mb-1">Batas Masuk Tepat Waktu</label>
@@ -4156,6 +4178,7 @@ function setupEventListeners() {
     // 4. Office Settings Form Submit
     if (e.target && e.target.id === 'office-settings-form') {
       state.officeSettings.companyName = document.getElementById('set-company-name').value.trim();
+      state.officeSettings.companyLogo = document.getElementById('set-company-logo').value.trim();
       state.officeSettings.workStart = document.getElementById('set-work-start').value;
       state.officeSettings.workEnd = document.getElementById('set-work-end').value;
       state.officeSettings.defaultAnnualLeaveQuota = Number(document.getElementById('set-quota').value || 12);
