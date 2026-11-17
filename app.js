@@ -135,6 +135,14 @@ function resetToDefaultDatabase(notify = true) {
   if (notify) showToast('Data berhasil di-reset ke data bawaan demo!', 'info');
 }
 
+function clearAllAttendances(notify = true) {
+  state.attendances = [];
+  saveDatabase();
+  if (notify) showToast('Seluruh riwayat presensi & log lembur berhasil dikosongkan (0 Jam).', 'success');
+  renderApp();
+}
+window.clearAllAttendances = clearAllAttendances;
+
 function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
@@ -645,7 +653,7 @@ function handleLogin(identifier, pin, role) {
     );
 
     if (!isPinValid) {
-      showToast(`PIN salah! Untuk ${emp.name}, gunakan PIN: ${emp.pin || emp.nip}`, 'error');
+      showToast('PIN yang Anda masukkan salah! Silakan coba kembali.', 'error');
       return;
     }
 
@@ -1893,15 +1901,16 @@ function renderLoginScreen() {
                   </svg>
                 </div>
                 <input type="text" id="login-id" required
-                  value="${!isEmpRole ? '11024' : ''}"
-                  placeholder="${!isEmpRole ? '11024 atau email' : 'Masukkan NIP Anda (Contoh: 11001)'}"
+                  value=""
+                  placeholder="${!isEmpRole ? 'Masukkan NIP / Email Admin' : 'Masukkan NIP Anda (Contoh: 11001)'}"
+                  autocomplete="username"
                   class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 text-xs font-mono font-bold">
               </div>
             </div>
 
             <div>
               <label class="block font-bold text-slate-700 mb-1.5">
-                ${!isEmpRole ? 'Password / PIN Admin' : 'PIN Karyawan (Sama dengan NIP)'}
+                ${!isEmpRole ? 'Password / PIN Admin' : 'PIN Karyawan'}
               </label>
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
@@ -1910,8 +1919,9 @@ function renderLoginScreen() {
                   </svg>
                 </div>
                 <input type="password" id="login-pin" required
-                  value="${!isEmpRole ? 'user@123' : ''}"
-                  placeholder="${!isEmpRole ? 'user@123' : 'Masukkan PIN (Contoh: 11001)'}"
+                  value=""
+                  placeholder="${!isEmpRole ? 'Masukkan Password / PIN Admin' : 'Masukkan PIN Anda'}"
+                  autocomplete="current-password"
                   class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-blue-500 focus:border-blue-500 text-xs font-mono">
               </div>
             </div>
@@ -3221,6 +3231,11 @@ function renderAdminReportsTab() {
                 <span>📋 Rincian Harian Presensi (${reports.length} Log)</span>
               </button>
             </div>
+            <button type="button" data-action="clear-all-attendances"
+              class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-300">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              <span>🗑️ Kosongkan Log Lembur (0 Jam)</span>
+            </button>
           </div>
           ${state.reportFilter.employeeId !== 'ALL' ? `
             <div class="flex items-center space-x-2 text-xs bg-amber-50 text-amber-900 px-3 py-1.5 rounded-xl border border-amber-200">
