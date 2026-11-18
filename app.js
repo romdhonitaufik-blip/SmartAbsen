@@ -91,6 +91,11 @@ function loadDatabase() {
       if (parsed.officeSettings) {
         state.officeSettings = { ...state.officeSettings, ...parsed.officeSettings };
         if (!state.officeSettings.companyLogo) state.officeSettings.companyLogo = 'logo.jpg';
+        if (typeof DEFAULT_OFFICE_SETTINGS !== 'undefined' && DEFAULT_OFFICE_SETTINGS.googleScriptUrl) {
+          if (!state.officeSettings.googleScriptUrl) {
+            state.officeSettings.googleScriptUrl = DEFAULT_OFFICE_SETTINGS.googleScriptUrl;
+          }
+        }
       }
       if (Array.isArray(parsed.employees) && parsed.employees.length >= 30) {
         state.employees = parsed.employees;
@@ -186,11 +191,21 @@ function saveSession() {
 }
 
 // ============================================================================
-// 2. GOOGLE SPREADSHEET SYNC
+// 2. GOOGLE SPREADSHEET SYNC & CLOUD DATABASE
 // ============================================================================
+function getGoogleScriptUrl() {
+  const localUrl = (state.officeSettings && state.officeSettings.googleScriptUrl || '').trim();
+  const defaultUrl = (typeof DEFAULT_OFFICE_SETTINGS !== 'undefined' && DEFAULT_OFFICE_SETTINGS.googleScriptUrl || '').trim();
+  return localUrl || defaultUrl;
+}
+window.getGoogleScriptUrl = getGoogleScriptUrl;
+
 async function syncToGoogleSheets(action, payload) {
-  const url = (state.officeSettings.googleScriptUrl || '').trim();
-  if (!url) return;
+  const url = getGoogleScriptUrl();
+  if (!url) {
+    console.warn(`[Google Sheets] URL belum disetel, data ${action} hanya disimpan di lokal perangkat.`);
+    return false;
+  }
   try {
     const body = { action, ...payload, clientTimestamp: new Date().toISOString() };
     await fetch(url, {
@@ -200,13 +215,131 @@ async function syncToGoogleSheets(action, payload) {
       body: JSON.stringify(body)
     });
     console.log(`[Google Sheets] Berhasil mengirim aksi: ${action}`);
+    return true;
   } catch (err) {
     console.warn(`[Google Sheets] Gagal mengirim ${action}:`, err);
+    return false;
   }
 }
 
+async function fetchCloudData(notify = false) {
+  const url = getGoogleScriptUrl();
+  if (!url) {
+    if (notify) showToast('URL Google Apps Script belum disetel di Pengaturan.', 'warning');
+    return;
+  }
+
+  state.isSyncingSheets = true;
+  updateSyncButtonUI(true);
+
+  try {
+    const fetchUrl = url + (url.includes('?') ? '&' : '?') + 'action=GET_DATA&t=' + Date.now();
+    const res = await fetch(fetchUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    if (data && data.status === 'success') {
+      // 1. Sinkronisasi Data Absensi dari Cloud
+      if (Array.isArray(data.attendances)) {
+        const attMap = new Map();
+        // Pertahankan data lokal
+        state.attendances.forEach(a => {
+          const key = a.id || (a.employeeId + '_' + a.date);
+          attMap.set(key, a);
+        });
+        // Gabungkan data dari Cloud
+        data.attendances.forEach(cloudAtt => {
+          const key = cloudAtt.id || (cloudAtt.employeeId + '_' + cloudAtt.date);
+          const existing = attMap.get(key);
+          const ot = calculateOvertime(cloudAtt.date, cloudAtt.clockIn, cloudAtt.clockOut);
+          const normalized = {
+            id: cloudAtt.id,
+            date: cloudAtt.date,
+            employeeId: cloudAtt.employeeId,
+            clockIn: cloudAtt.clockIn || (existing ? existing.clockIn : null),
+            clockInStatus: cloudAtt.clockInStatus || (existing ? existing.clockInStatus : 'Tepat Waktu'),
+            clockInPhoto: cloudAtt.clockInPhoto || (existing ? existing.clockInPhoto : null),
+            clockInLocation: cloudAtt.clockInLocation || (existing ? existing.clockInLocation : { address: 'Kantor PT ABI' }),
+            clockOut: cloudAtt.clockOut || (existing ? existing.clockOut : null),
+            workHours: cloudAtt.workHours || (existing ? existing.workHours : null),
+            overtimeHours: ot.formatted,
+            overtimeDecimal: ot.hoursDecimal,
+            overtimeMinutes: ot.minutes,
+            status: cloudAtt.status || (existing ? existing.status : 'Hadir')
+          };
+          attMap.set(key, normalized);
+        });
+        state.attendances = Array.from(attMap.values());
+        state.attendances.sort((a, b) => (b.date + ' ' + (b.clockIn || '')).localeCompare(a.date + ' ' + (a.clockIn || '')));
+      }
+
+      // 2. Sinkronisasi Data Pengajuan Cuti / Izin dari Cloud
+      if (Array.isArray(data.requests)) {
+        const reqMap = new Map();
+        state.requests.forEach(r => reqMap.set(r.id, r));
+        data.requests.forEach(cloudReq => {
+          reqMap.set(cloudReq.id, {
+            id: cloudReq.id,
+            employeeId: cloudReq.employeeId,
+            type: cloudReq.type || 'IZIN',
+            category: cloudReq.category || cloudReq.type || 'IZIN',
+            startDate: cloudReq.startDate,
+            endDate: cloudReq.endDate,
+            totalDays: Number(cloudReq.totalDays) || 1,
+            reason: cloudReq.reason || '-',
+            emergencyContact: cloudReq.emergencyContact || '-',
+            attachment: cloudReq.attachment || null,
+            status: cloudReq.status || 'PENDING',
+            reviewNotes: cloudReq.reviewNotes || null,
+            createdAt: cloudReq.createdAt || (cloudReq.startDate + ' 08:00:00')
+          });
+        });
+        state.requests = Array.from(reqMap.values());
+        state.requests.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+      }
+
+      saveDatabase();
+      if (notify) {
+        showToast(`Sinkronisasi Cloud Berhasil! (${state.attendances.length} Log Presensi, ${state.requests.length} Pengajuan)`, 'success');
+      }
+      renderApp();
+    } else {
+      if (notify) showToast('Respon dari Google Sheets: ' + (data ? data.message : 'Gagal'), 'warning');
+    }
+  } catch (err) {
+    console.warn('Fetch cloud data warning:', err);
+    if (notify) showToast('Gagal sinkronisasi dari Google Sheets: ' + err.message, 'error');
+  } finally {
+    state.isSyncingSheets = false;
+    updateSyncButtonUI(false);
+  }
+}
+window.fetchCloudData = fetchCloudData;
+
+function updateSyncButtonUI(isSyncing) {
+  const syncBtns = document.querySelectorAll('[data-action="sync-cloud-data"]');
+  syncBtns.forEach(btn => {
+    if (isSyncing) {
+      btn.classList.add('opacity-75');
+      const textSpan = btn.querySelector('span');
+      if (textSpan) textSpan.textContent = 'Menyinkronkan...';
+      const svg = btn.querySelector('svg');
+      if (svg) svg.classList.add('animate-spin');
+    } else {
+      btn.classList.remove('opacity-75');
+      const textSpan = btn.querySelector('span');
+      if (textSpan) textSpan.textContent = 'Sinkron Cloud';
+      const svg = btn.querySelector('svg');
+      if (svg) svg.classList.remove('animate-spin');
+    }
+  });
+}
+
 async function sendTestRowToGoogleSheets() {
-  const url = (state.officeSettings.googleScriptUrl || '').trim();
+  const url = getGoogleScriptUrl();
   if (!url) {
     showToast('Masukkan URL Web App terlebih dahulu!', 'warning');
     return;
@@ -235,9 +368,9 @@ async function sendTestRowToGoogleSheets() {
       body: JSON.stringify({
         action: 'CLOCK_IN',
         id: 'TEST-' + Date.now(),
-        date: now.toISOString().split('T')[0],
-        employeeId: state.currentUser ? state.currentUser.id : 'TEST-001',
-        employeeName: (state.currentUser ? state.currentUser.name : 'Uji Coba Sistem') + ' (Tes Foto)',
+        date: getTodayString(),
+        employeeId: state.currentUser ? state.currentUser.id : 'ABR-024',
+        employeeName: state.currentUser ? state.currentUser.name : 'ADMIN ABI',
         clockIn: now.toTimeString().split(' ')[0],
         clockInStatus: 'Tepat Waktu',
         clockInLocation: 'Uji Coba Pengiriman Foto & Data',
@@ -2023,7 +2156,15 @@ function renderMainApp() {
           `}
 
           <!-- User Profile & Logout -->
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-2.5">
+            ${getGoogleScriptUrl() ? `
+              <button type="button" data-action="sync-cloud-data" title="Tarik data terbaru dari Google Spreadsheet"
+                class="px-2.5 py-1.5 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 border border-slate-200 shadow-xs cursor-pointer">
+                <svg class="w-3.5 h-3.5 text-emerald-600 ${state.isSyncingSheets ? 'animate-spin' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span class="hidden md:inline">Sinkron Cloud</span>
+              </button>
+            ` : ''}
+
             <div class="hidden sm:flex items-center space-x-2.5 bg-white py-1.5 px-3 rounded-xl border border-slate-200 shadow-xs">
               <img src="${user.avatar || 'https://ui-avatars.com/api/?name=User'}" class="w-8 h-8 rounded-lg object-cover">
               <div class="text-left text-xs">
@@ -2698,24 +2839,60 @@ function renderAdminDashboardTab() {
     totalOtOverall += ot.hoursDecimal;
   });
 
+  const scriptUrl = getGoogleScriptUrl();
+  const hasScriptUrl = !!scriptUrl;
+
   return `
     <div class="space-y-6">
       
       <!-- Greeting Banner -->
-      <div class="bg-gradient-to-r from-indigo-700 via-indigo-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex items-center justify-between">
+      <div class="bg-gradient-to-r from-indigo-700 via-indigo-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <span class="text-xs font-semibold text-indigo-300">Ringkasan Hari Ini</span>
           <h2 class="text-2xl font-black mt-0.5">Dashboard Manajemen Presensi</h2>
           <p class="text-xs text-indigo-200 mt-1">${getCurrentDateFormatted()}</p>
         </div>
-        ${pendingCount > 0 ? `
-          <button type="button" data-action="switch-tab" data-tab="approvals"
-            class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-lg shadow-rose-500/30">
-            <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-            <span>Ada ${pendingCount} Pengajuan Menunggu</span>
-          </button>
-        ` : ''}
+        <div class="flex flex-wrap items-center gap-2">
+          ${hasScriptUrl ? `
+            <button type="button" data-action="sync-cloud-data"
+              class="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer backdrop-blur-md">
+              <svg class="w-4 h-4 ${state.isSyncingSheets ? 'animate-spin' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              <span>${state.isSyncingSheets ? 'Menyinkronkan...' : 'Tarik Presensi Cloud'}</span>
+            </button>
+          ` : `
+            <button type="button" data-action="switch-tab" data-tab="settings"
+              class="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer backdrop-blur-md">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              <span>Hubungkan Sheets</span>
+            </button>
+          `}
+          ${pendingCount > 0 ? `
+            <button type="button" data-action="switch-tab" data-tab="approvals"
+              class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-lg shadow-rose-500/30">
+              <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+              <span>Ada ${pendingCount} Pengajuan Menunggu</span>
+            </button>
+          ` : ''}
+        </div>
       </div>
+
+      ${!hasScriptUrl ? `
+        <div class="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-200 text-amber-800 flex items-center justify-center shrink-0 font-bold">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+              <div class="font-bold text-xs">Penting: Database Cloud Belum Terhubung</div>
+              <p class="text-[11px] text-amber-700">Agar presensi dari HP 34 karyawan langsung masuk ke Google Spreadsheet & Dashboard ini, masukkan URL Google Apps Script Anda.</p>
+            </div>
+          </div>
+          <button type="button" data-action="switch-tab" data-tab="settings"
+            class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer shadow-sm">
+            Buka Menu Pengaturan
+          </button>
+        </div>
+      ` : ''}
 
       <!-- Quick Banner: Rekapitulasi Jam Lembur Per Orang (34 Staf) -->
       <div class="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4 border border-amber-300/40">
@@ -3665,9 +3842,12 @@ function renderAdminSettingsTab() {
 
             <div>
               <label class="block font-bold text-slate-700 mb-1">URL Web App Google Apps Script</label>
-              <input type="url" id="set-sheets-url" value="${escapeHtml(set.googleScriptUrl)}"
+              <input type="url" id="set-sheets-url" value="${escapeHtml(set.googleScriptUrl || (typeof DEFAULT_OFFICE_SETTINGS !== 'undefined' ? DEFAULT_OFFICE_SETTINGS.googleScriptUrl : ''))}"
                 placeholder="https://script.google.com/macros/s/AKfycb.../exec"
                 class="w-full bg-white border border-slate-300 rounded-xl p-2.5 font-mono text-xs focus:ring-emerald-500 focus:border-emerald-500">
+              <p class="text-[11px] text-slate-500 mt-1">
+                💡 <b>Petunjuk:</b> Agar seluruh HP karyawan otomatis terhubung tanpa input manual, cantumkan URL ini ke file <code>dummy-data.js</code> pada baris <code>googleScriptUrl: "..."</code> lalu upload ke GitHub.
+              </p>
             </div>
 
             <div class="flex flex-wrap items-center gap-2">
@@ -3675,6 +3855,12 @@ function renderAdminSettingsTab() {
                 class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
                 <span>Kirim 1 Baris Uji Coba ke Spreadsheet</span>
+              </button>
+
+              <button type="button" data-action="sync-cloud-data"
+                class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>Tarik Data Terbaru dari Spreadsheet</span>
               </button>
             </div>
           </div>
@@ -3966,6 +4152,13 @@ function setupEventListeners() {
         }
         state.currentTab = tab;
         renderApp();
+        if (getGoogleScriptUrl() && ['dashboard', 'approvals', 'overtime', 'reports', 'history'].includes(tab)) {
+          fetchCloudData(false);
+        }
+        break;
+      }
+      case 'sync-cloud-data': {
+        fetchCloudData(true);
         break;
       }
       case 'refresh-gps': {
@@ -4298,6 +4491,9 @@ function initSystem() {
     detectLocation();
     renderApp();
     startClockTicker();
+    if (getGoogleScriptUrl()) {
+      fetchCloudData(false);
+    }
     console.log('[ABI SmartAbsen] Sistem siap digunakan.');
   } catch (err) {
     console.error('[ABI SmartAbsen] Error inisialisasi:', err);

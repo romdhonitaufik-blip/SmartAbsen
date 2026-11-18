@@ -433,11 +433,146 @@ function otorisasiIzinDrive() {
 }
 
 function doGet(e) {
-  return createJsonResponse({
-    status: "online",
-    message: "Google Apps Script Backend SmartAbsen PT ANUGERAH BERKAH INDUSTRI aktif!",
-    timestamp: new Date().toISOString()
-  });
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "GET_DATA";
+
+    if (action === "GET_DATA" || action === "GET_ALL" || !action) {
+      // 1. Baca Data Absensi
+      var attendances = [];
+      var sheetAbsensi = ss.getSheetByName("Absensi");
+      if (sheetAbsensi && sheetAbsensi.getLastRow() > 1) {
+        var headerInfo = getHeaderInfo(sheetAbsensi);
+        var colId = findColumnIndex(headerInfo.colMap, ["id absen", "id"]) || 1;
+        var colDate = findColumnIndex(headerInfo.colMap, ["tanggal", "date"]) || 2;
+        var colEmpId = findColumnIndex(headerInfo.colMap, ["id karyawan"]) || 3;
+        var colEmpName = findColumnIndex(headerInfo.colMap, ["nama karyawan", "nama"]) || 4;
+        var colClockIn = findColumnIndex(headerInfo.colMap, ["jam masuk"]) || 5;
+        var colInStatus = findColumnIndex(headerInfo.colMap, ["status masuk"]) || 6;
+        var colClockOut = findColumnIndex(headerInfo.colMap, ["jam pulang"]) || 7;
+        var colWorkHours = findColumnIndex(headerInfo.colMap, ["durasi kerja", "durasi", "jam kerja"]) || 8;
+        var colOvertime = findColumnIndex(headerInfo.colMap, ["jam lembur", "lembur"]);
+        var colStatus = findColumnIndex(headerInfo.colMap, ["status kehadiran", "kehadiran"]) || 10;
+        var colGps = findColumnIndex(headerInfo.colMap, ["lokasi gps", "lokasi masuk", "lokasi"]) || 11;
+        var colLinkFoto = findColumnIndex(headerInfo.colMap, ["link foto", "link foto hd", "link"]) || 13;
+
+        var numRows = sheetAbsensi.getLastRow() - 1;
+        var numCols = sheetAbsensi.getLastColumn();
+        var dataRows = sheetAbsensi.getRange(2, 1, numRows, numCols).getValues();
+
+        for (var i = 0; i < dataRows.length; i++) {
+          var row = dataRows[i];
+          var rawDate = row[colDate - 1];
+          var dateFormatted = "";
+          if (rawDate instanceof Date) {
+            dateFormatted = Utilities.formatDate(rawDate, "Asia/Jakarta", "yyyy-MM-dd");
+          } else {
+            dateFormatted = (rawDate || "").toString().trim();
+          }
+
+          var attId = (row[colId - 1] || "").toString().trim();
+          var empId = (row[colEmpId - 1] || "").toString().trim();
+          if (!empId && !attId) continue;
+
+          var cIn = (row[colClockIn - 1] || "").toString().trim();
+          var cOut = (row[colClockOut - 1] || "").toString().trim();
+          var cInStatus = (row[colInStatus - 1] || "Tepat Waktu").toString().trim();
+          var wHours = (row[colWorkHours - 1] || "-").toString().trim();
+          var ot = colOvertime ? (row[colOvertime - 1] || "-").toString().trim() : "-";
+          var photoUrl = colLinkFoto ? (row[colLinkFoto - 1] || "").toString().trim() : "";
+          var locGps = (row[colGps - 1] || "").toString().trim();
+          var st = (row[colStatus - 1] || "Hadir").toString().trim();
+
+          attendances.push({
+            id: attId || ("ATT-" + (i + 1)),
+            date: dateFormatted,
+            employeeId: empId,
+            clockIn: cIn && cIn !== "-" ? cIn : null,
+            clockInStatus: cInStatus,
+            clockInPhoto: photoUrl && photoUrl !== "-" ? photoUrl : null,
+            clockInLocation: {
+              lat: null,
+              lng: null,
+              address: locGps && locGps !== "-" ? locGps : "Kantor PT ABI"
+            },
+            clockOut: cOut && cOut !== "-" ? cOut : null,
+            workHours: wHours && wHours !== "-" ? wHours : null,
+            status: st,
+            overtime: ot
+          });
+        }
+      }
+
+      // 2. Baca Data Pengajuan (Cuti / Izin / Sakit)
+      var requests = [];
+      var sheetPengajuan = ss.getSheetByName("Pengajuan");
+      if (sheetPengajuan && sheetPengajuan.getLastRow() > 1) {
+        var headerReq = getHeaderInfo(sheetPengajuan);
+        var colReqId = findColumnIndex(headerReq.colMap, ["id pengajuan", "id"]) || 1;
+        var colReqEmpId = findColumnIndex(headerReq.colMap, ["id karyawan"]) || 2;
+        var colReqType = findColumnIndex(headerReq.colMap, ["jenis", "tipe"]) || 4;
+        var colReqCategory = findColumnIndex(headerReq.colMap, ["kategori"]) || 5;
+        var colReqStart = findColumnIndex(headerReq.colMap, ["tgl mulai", "mulai"]) || 6;
+        var colReqEnd = findColumnIndex(headerReq.colMap, ["tgl selesai", "selesai"]) || 7;
+        var colReqDays = findColumnIndex(headerReq.colMap, ["total hari", "hari"]) || 8;
+        var colReqReason = findColumnIndex(headerReq.colMap, ["alasan"]) || 9;
+        var colReqLinkDoc = findColumnIndex(headerReq.colMap, ["link bukti", "link dokumen"]) || 11;
+        var colReqContact = findColumnIndex(headerReq.colMap, ["kontak", "darurat"]) || 12;
+        var colReqStatus = findColumnIndex(headerReq.colMap, ["status"]) || 13;
+        var colReqNotes = findColumnIndex(headerReq.colMap, ["catatan hrd", "catatan", "alasan hr"]) || 14;
+
+        var numReqRows = sheetPengajuan.getLastRow() - 1;
+        var numReqCols = sheetPengajuan.getLastColumn();
+        var reqRows = sheetPengajuan.getRange(2, 1, numReqRows, numReqCols).getValues();
+
+        for (var j = 0; j < reqRows.length; j++) {
+          var rRow = reqRows[j];
+          var reqId = (rRow[colReqId - 1] || "").toString().trim();
+          var reqEmpId = (rRow[colReqEmpId - 1] || "").toString().trim();
+          if (!reqId && !reqEmpId) continue;
+
+          var rawStart = rRow[colReqStart - 1];
+          var startStr = rawStart instanceof Date ? Utilities.formatDate(rawStart, "Asia/Jakarta", "yyyy-MM-dd") : (rawStart || "").toString().trim();
+          var rawEnd = rRow[colReqEnd - 1];
+          var endStr = rawEnd instanceof Date ? Utilities.formatDate(rawEnd, "Asia/Jakarta", "yyyy-MM-dd") : (rawEnd || "").toString().trim();
+
+          requests.push({
+            id: reqId || ("REQ-" + (j + 1)),
+            employeeId: reqEmpId,
+            type: (rRow[colReqType - 1] || "IZIN").toString().trim(),
+            category: (rRow[colReqCategory - 1] || rRow[colReqType - 1] || "IZIN").toString().trim(),
+            startDate: startStr,
+            endDate: endStr,
+            totalDays: Number(rRow[colReqDays - 1]) || 1,
+            reason: (rRow[colReqReason - 1] || "").toString().trim(),
+            emergencyContact: (rRow[colReqContact - 1] || "").toString().trim(),
+            attachment: colReqLinkDoc ? (rRow[colReqLinkDoc - 1] || "").toString().trim() : "",
+            status: (rRow[colReqStatus - 1] || "PENDING").toString().trim(),
+            reviewNotes: (rRow[colReqNotes - 1] || "").toString().trim()
+          });
+        }
+      }
+
+      return createJsonResponse({
+        status: "success",
+        attendances: attendances,
+        requests: requests,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return createJsonResponse({
+      status: "online",
+      message: "Google Apps Script Backend SmartAbsen PT ANUGERAH BERKAH INDUSTRI aktif!",
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (err) {
+    return createJsonResponse({
+      status: "error",
+      message: err.toString()
+    });
+  }
 }
 
 function createJsonResponse(obj) {

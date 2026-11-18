@@ -12,7 +12,8 @@ const DEFAULT_OFFICE_SETTINGS = {
   allowedRadiusMeters: 10,     // Radius dalam meter
   strictGps: false,
   defaultAnnualLeaveQuota: 12,
-  googleScriptUrl: ""
+  // Tempelkan URL Web App Google Apps Script di sini agar otomatis aktif di seluruh HP karyawan
+  googleScriptUrl: "https://script.google.com/macros/s/AKfycbyYg4WkJ912lWos4jfjVCy4IJBx0zS8Ch4CyEwkf5u1Z9OQ1CLYqVGINBkhr90l91d0/exec"
 };
 
 const DEFAULT_EMPLOYEES = [
