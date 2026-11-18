@@ -200,6 +200,14 @@ function getGoogleScriptUrl() {
 }
 window.getGoogleScriptUrl = getGoogleScriptUrl;
 
+function getCompanyLetterhead() {
+  if (typeof KOP_SURAT_BASE64 !== 'undefined' && KOP_SURAT_BASE64) {
+    return KOP_SURAT_BASE64;
+  }
+  return 'kop_surat.jpg';
+}
+window.getCompanyLetterhead = getCompanyLetterhead;
+
 async function syncToGoogleSheets(action, payload) {
   const url = getGoogleScriptUrl();
   if (!url) {
@@ -1307,11 +1315,18 @@ function exportReportsToExcel() {
       </head>
       <body>
         <table>
-          <tr><td colspan="11" class="title">${escapeHtml(state.officeSettings.companyName)}</td></tr>
-          <tr><td colspan="11" class="bold">REKAPITULASI JAM LEMBUR KARYAWAN (PER ORANG)</td></tr>
-          <tr><td colspan="11" class="sub">Periode: ${rangeLabel} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Karyawan: ${summaryList.length} Orang</td></tr>
-          <tr><td colspan="11" class="sub">Aturan Lembur: Senin-Jumat &gt;17:00 | Sabtu &gt;13:00 | Minggu Penuh (Kurang 45 mnt = 0 Jam, &ge; 45 mnt = 1 Jam)</td></tr>
-          <tr><td colspan="11"></td></tr>
+          <!-- KOP SURAT RESMI PERUSAHAAN -->
+          <tr>
+            <td colspan="11" align="center" style="text-align: center; padding: 10px 0; background-color: #ffffff; border: none;">
+              <img src="${getCompanyLetterhead()}" width="650" height="90" alt="PT. ANUGERAH BERKAH INDUSTRI" style="display: block; margin: 0 auto;" />
+            </td>
+          </tr>
+          <tr><td colspan="11" style="border-bottom: 2px solid #000000; height: 3px; padding: 0;"></td></tr>
+          <tr><td colspan="11" style="height: 10px; border: none;"></td></tr>
+          <tr><td colspan="11" class="bold" style="font-size: 13pt; text-align: center; color: #1e3a8a;">REKAPITULASI JAM LEMBUR KARYAWAN (PER ORANG)</td></tr>
+          <tr><td colspan="11" class="sub" style="text-align: center;">Periode: ${rangeLabel} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Karyawan: ${summaryList.length} Orang</td></tr>
+          <tr><td colspan="11" class="sub" style="text-align: center;">Aturan Lembur: Senin-Jumat &gt;17:00 | Sabtu &gt;13:00 | Minggu Penuh (Kurang 45 mnt = 0 Jam, &ge; 45 mnt = 1 Jam)</td></tr>
+          <tr><td colspan="11" style="height: 10px; border: none;"></td></tr>
           <tr>
             <th>No</th>
             <th>NIP</th>
@@ -1405,10 +1420,17 @@ function exportReportsToExcel() {
     </head>
     <body>
       <table>
-        <tr><td colspan="12" class="title">${escapeHtml(state.officeSettings.companyName)}</td></tr>
-        <tr><td colspan="12" class="bold">LAPORAN REKAPITULASI PRESENSI & JAM LEMBUR KARYAWAN</td></tr>
-        <tr><td colspan="12" class="sub">Periode: ${rangeLabel} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Data: ${reports.length} Baris</td></tr>
-        <tr><td colspan="12"></td></tr>
+        <!-- KOP SURAT RESMI PERUSAHAAN -->
+        <tr>
+          <td colspan="12" align="center" style="text-align: center; padding: 10px 0; background-color: #ffffff; border: none;">
+            <img src="${getCompanyLetterhead()}" width="680" height="95" alt="PT. ANUGERAH BERKAH INDUSTRI" style="display: block; margin: 0 auto;" />
+          </td>
+        </tr>
+        <tr><td colspan="12" style="border-bottom: 2px solid #000000; height: 3px; padding: 0;"></td></tr>
+        <tr><td colspan="12" style="height: 10px; border: none;"></td></tr>
+        <tr><td colspan="12" class="bold" style="font-size: 13pt; text-align: center; color: #1e3a8a;">LAPORAN REKAPITULASI PRESENSI & JAM LEMBUR KARYAWAN</td></tr>
+        <tr><td colspan="12" class="sub" style="text-align: center;">Periode: ${rangeLabel} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Data: ${reports.length} Baris</td></tr>
+        <tr><td colspan="12" style="height: 10px; border: none;"></td></tr>
         <tr>
           <th>No</th>
           <th>Tanggal</th>
@@ -1509,19 +1531,19 @@ function exportReportsToPDF() {
     });
 
     container.innerHTML = `
-      <div style="border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <img src="logo.jpg" style="height: 48px; width: 48px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; padding: 2px;" onerror="if(this.src.indexOf('logo.png') === -1) { this.src = 'logo.png'; }">
-            <div>
-              <h1 style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin: 0;">${escapeHtml(state.officeSettings.companyName)}</h1>
-              <p style="font-size: 11px; color: #475569; margin: 2px 0;">Sistem Manajemen HR & Rekapitulasi Jam Lembur Karyawan</p>
-            </div>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 13px; font-weight: bold; color: #b45309;">REKAPITULASI LEMBUR PER ORANG</div>
-            <div style="font-size: 10px; color: #64748b;">Periode: ${rangeLabel}</div>
-          </div>
+      <!-- KOP SURAT RESMI PT ABI -->
+      <div style="text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000000; padding-bottom: 6px;">
+        <img src="${getCompanyLetterhead()}" style="width: 100%; max-height: 95px; object-fit: contain; display: block; margin: 0 auto;" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+        <div>
+          <h2 style="font-size: 15px; font-weight: bold; color: #1e3a8a; margin: 0; text-transform: uppercase;">Laporan Rekapitulasi Jam Lembur Karyawan (Per Orang)</h2>
+          <p style="font-size: 10px; color: #475569; margin: 2px 0 0 0;">Daftar akumulasi jam lembur resmi seluruh staf PT ANUGERAH BERKAH INDUSTRI</p>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-size: 11px; font-weight: bold; color: #b45309;">Periode: ${rangeLabel}</div>
+          <div style="font-size: 9px; color: #64748b;">Dicetak: ${new Date().toLocaleString('id-ID')} WIB</div>
         </div>
       </div>
 
@@ -1643,19 +1665,19 @@ function exportReportsToPDF() {
   });
 
   container.innerHTML = `
-    <div style="border-bottom: 2px solid #1d4ed8; padding-bottom: 12px; margin-bottom: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <img src="logo.jpg" style="height: 48px; width: 48px; object-fit: contain; border-radius: 6px; border: 1px solid #e2e8f0; padding: 2px;" onerror="if(this.src.indexOf('logo.png') === -1) { this.src = 'logo.png'; }">
-          <div>
-            <h1 style="font-size: 18px; font-weight: bold; color: #1e3a8a; margin: 0;">${escapeHtml(state.officeSettings.companyName)}</h1>
-            <p style="font-size: 11px; color: #475569; margin: 2px 0;">Sistem Manajemen HR & Rekapitulasi Presensi Karyawan</p>
-          </div>
-        </div>
-        <div style="text-align: right;">
-          <div style="font-size: 13px; font-weight: bold; color: #1d4ed8;">REKAPITULASI PRESENSI & LEMBUR</div>
-          <div style="font-size: 10px; color: #64748b;">Periode: ${rangeLabel}</div>
-        </div>
+    <!-- KOP SURAT RESMI PT ABI -->
+    <div style="text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000000; padding-bottom: 6px;">
+      <img src="${getCompanyLetterhead()}" style="width: 100%; max-height: 95px; object-fit: contain; display: block; margin: 0 auto;" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
+    </div>
+
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 14px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">
+      <div>
+        <h2 style="font-size: 15px; font-weight: bold; color: #1e3a8a; margin: 0; text-transform: uppercase;">Laporan Rincian Presensi & Jam Kerja Harian</h2>
+        <p style="font-size: 10px; color: #475569; margin: 2px 0 0 0;">Log detail jam masuk, jam pulang, dan lembur harian staf</p>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 11px; font-weight: bold; color: #1d4ed8;">Periode: ${rangeLabel}</div>
+        <div style="font-size: 9px; color: #64748b;">Dicetak: ${new Date().toLocaleString('id-ID')} WIB</div>
       </div>
     </div>
 
@@ -2722,7 +2744,7 @@ function renderEmployeeHistoryTab() {
   return `
     <div class="space-y-6">
       <!-- Personal Overtime & Attendance Summary Card -->
-      <div class="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-5 text-white shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="bg-gradient-to-r from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-5 text-white shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
         <div>
           <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-white/20 uppercase tracking-wider">
             Rekap Lembur Pribadi
@@ -2748,12 +2770,26 @@ function renderEmployeeHistoryTab() {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-        <div class="flex items-center justify-between">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 print-container">
+        <!-- KOP SURAT RESMI CETAK -->
+        <div class="hidden print-only mb-4 text-center border-b-2 border-black pb-2">
+          <img src="${getCompanyLetterhead()}" class="w-full max-h-24 object-contain mx-auto" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
+          <div class="mt-2 flex justify-between items-center text-[10px] text-slate-700 font-bold border-b border-slate-300 pb-1">
+            <span>RIWAYAT PRESENSI & JAM KERJA: ${escapeHtml(state.currentUser ? state.currentUser.name : '')} (${escapeHtml(state.currentUser ? state.currentUser.nip : '')})</span>
+            <span>Dicetak: ${new Date().toLocaleDateString('id-ID')}</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between no-print">
           <div>
             <h2 class="text-base font-bold text-slate-900">Riwayat Presensi & Jam Kerja</h2>
             <p class="text-xs text-slate-500">Daftar kehadiran harian, jam masuk, jam pulang, dan lemburan Anda</p>
           </div>
+          <button type="button" data-action="print-report"
+            class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center space-x-1.5 transition cursor-pointer">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+            <span>Cetak Riwayat</span>
+          </button>
         </div>
 
         <div class="overflow-x-auto">
@@ -3513,6 +3549,15 @@ function renderAdminReportsTab() {
       ${currentView === 'per-employee' ? `
         <!-- TABEL 1: REKAPITULASI JAM LEMBUR PER ORANG -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 print-container">
+          <!-- KOP SURAT RESMI CETAK -->
+          <div class="hidden print-only mb-4 text-center border-b-2 border-black pb-2">
+            <img src="${getCompanyLetterhead()}" class="w-full max-h-24 object-contain mx-auto" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
+            <div class="mt-2 flex justify-between items-center text-[10px] text-slate-700 font-bold border-b border-slate-300 pb-1">
+              <span>REKAPITULASI JAM LEMBUR KARYAWAN (PER ORANG)</span>
+              <span>Periode: ${rangeLabel}</span>
+            </div>
+          </div>
+
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
             <div>
               <div class="flex items-center space-x-2">
@@ -3626,6 +3671,15 @@ function renderAdminReportsTab() {
       ` : `
         <!-- TABEL 2: RINCIAN HARIAN PRESENSI (LOG DETAIL) -->
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4 print-container">
+          <!-- KOP SURAT RESMI CETAK -->
+          <div class="hidden print-only mb-4 text-center border-b-2 border-black pb-2">
+            <img src="${getCompanyLetterhead()}" class="w-full max-h-24 object-contain mx-auto" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
+            <div class="mt-2 flex justify-between items-center text-[10px] text-slate-700 font-bold border-b border-slate-300 pb-1">
+              <span>LAPORAN RINCIAN PRESENSI & JAM KERJA HARIAN</span>
+              <span>Periode: ${rangeLabel}</span>
+            </div>
+          </div>
+
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
             <div>
               <div class="flex items-center space-x-2">
