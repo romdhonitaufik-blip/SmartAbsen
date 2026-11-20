@@ -1207,7 +1207,7 @@ function exportReportsToCSV() {
   // Format 1: Rekapitulasi Jam Lembur Per Karyawan (Per Orang)
   if (state.reportFilter.viewType === 'per-employee') {
     const summaryList = getOvertimeSummaryPerEmployee(reports);
-    let csv = '\uFEFFNo,NIP,Nama Karyawan,Departemen,Jabatan,Total Hadir (Hari),Hari Lembur,Lembur Senin-Jumat (Jam),Lembur Sabtu (Jam),Lembur Minggu (Jam),Total Jam Lembur (Jam)\n';
+    let csv = '\uFEFF No,NIP,Nama Karyawan,Departemen,Jabatan,Total Hadir (Hari),Hari Lembur,Lembur Senin-Jumat (Jam),Lembur Sabtu (Jam),Lembur Minggu (Jam),Total Jam Lembur (Jam)\n';
     let totalHadirSum = 0;
     let totalOtDaysSum = 0;
     let totalWeekdaySum = 0;
@@ -1238,7 +1238,7 @@ function exportReportsToCSV() {
   }
 
   // Format 2: Rincian Harian Presensi
-  let csv = '\uFEFFID Absensi,Tanggal,Hari,NIP,Nama Karyawan,Departemen,Jam Masuk,Status Masuk,Jam Pulang,Total Jam Kerja,Jam Lembur,Status Kehadiran,Lokasi GPS\n';
+  let csv = '\uFEFF ID Absensi,Tanggal,Hari,NIP,Nama Karyawan,Departemen,Jam Masuk,Status Masuk,Jam Pulang,Total Jam Kerja,Jam Lembur,Status Kehadiran,Lokasi GPS\n';
   reports.forEach(r => {
     const emp = getEmployee(r.employeeId);
     const dayName = getDayNameIndonesian(r.date);
@@ -3295,6 +3295,9 @@ function renderAdminReportsTab() {
   const departments = [...new Set(state.employees.map(e => e.department))];
   const currentView = state.reportFilter.viewType || 'per-employee';
   const rangeType = state.reportFilter.range || '30days';
+  const rangeLabel = rangeType === '30days'
+    ? `30 Hari Terakhir (${getPastDateString(30)} s/d ${getTodayString()})`
+    : (rangeType === 'month' ? `Bulan ${state.reportFilter.month}` : (rangeType === 'all' ? 'Semua Data' : `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}`));
 
   // Hitung KPI
   let totalOvertimeHours = 0;
@@ -4203,6 +4206,8 @@ function setupEventListeners() {
         const tab = target.getAttribute('data-tab');
         if (tab === 'overtime') {
           state.reportFilter.viewType = 'per-employee';
+        } else if (tab === 'reports') {
+          state.reportFilter.viewType = 'daily';
         }
         state.currentTab = tab;
         renderApp();
