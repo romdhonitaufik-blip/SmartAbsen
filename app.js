@@ -54,8 +54,9 @@ const state = {
     attachment: null
   },
   reportFilter: {
-    range: '30days', // '30days' | 'month' | 'custom' | 'all'
+    range: 'all', // 'all' | '30days' | 'month' | 'custom'
     viewType: 'per-employee', // 'per-employee' | 'daily'
+    searchQuery: '',
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     month: new Date().toISOString().slice(0, 7),
@@ -260,13 +261,27 @@ async function fetchCloudData(notify = false) {
         });
         // Gabungkan data dari Cloud
         data.attendances.forEach(cloudAtt => {
-          const key = cloudAtt.id || (cloudAtt.employeeId + '_' + cloudAtt.date);
+          const emp = getEmployee(cloudAtt.employeeId);
+          const empId = emp ? emp.id : cloudAtt.employeeId;
+          const cleanDate = normalizeDateStr(cloudAtt.date);
+          const key = cloudAtt.id || (empId + '_' + cleanDate);
           const existing = attMap.get(key);
-          const ot = calculateOvertime(cloudAtt.date, cloudAtt.clockIn, cloudAtt.clockOut);
+
+          let ot = calculateOvertime(cleanDate, cloudAtt.clockIn, cloudAtt.clockOut);
+          if (ot.hoursDecimal === 0 && cloudAtt.overtime && cloudAtt.overtime !== '-' && cloudAtt.overtime !== '0 Jam') {
+            const match = String(cloudAtt.overtime).match(/(\d+(\.\d+)?)/);
+            if (match) {
+              const val = parseFloat(match[1]);
+              if (val > 0) {
+                ot = { formatted: `${val} Jam`, hoursDecimal: val, text: `${val} Jam`, minutes: val * 60 };
+              }
+            }
+          }
+
           const normalized = {
-            id: cloudAtt.id,
-            date: cloudAtt.date,
-            employeeId: cloudAtt.employeeId,
+            id: cloudAtt.id || key,
+            date: cleanDate,
+            employeeId: empId,
             clockIn: cloudAtt.clockIn || (existing ? existing.clockIn : null),
             clockInStatus: cloudAtt.clockInStatus || (existing ? existing.clockInStatus : 'Tepat Waktu'),
             clockInPhoto: cloudAtt.clockInPhoto || (existing ? existing.clockInPhoto : null),
@@ -642,10 +657,25 @@ function getPastDateString(days) {
   return d.toISOString().split('T')[0];
 }
 
+function normalizeDateStr(dateStr) {
+  if (!dateStr) return '';
+  const s = String(dateStr).trim();
+  // Tangani format DD/MM/YYYY atau DD-MM-YYYY
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(s)) {
+    const parts = s.split(/[\/\-]/);
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    return `${year}-${month}-${day}`;
+  }
+  return s;
+}
+
 function getDayNameIndonesian(dateStr) {
   if (!dateStr) return '-';
   try {
-    const d = new Date(dateStr + 'T12:00:00');
+    const cleanDate = normalizeDateStr(dateStr);
+    const d = new Date(cleanDate + 'T12:00:00');
     const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     return dayNames[d.getDay()] || '-';
   } catch (e) {
@@ -674,7 +704,8 @@ function calculateOvertime(dateStr, clockInStr, clockOutStr) {
   }
 
   try {
-    const d = new Date(dateStr + 'T12:00:00');
+    const cleanDate = normalizeDateStr(dateStr);
+    const d = new Date(cleanDate + 'T12:00:00');
     const day = d.getDay(); // 0 = Minggu, 1 = Senin, ..., 5 = Jumat, 6 = Sabtu
 
     const [outH, outM] = clockOutStr.split(':').map(Number);
@@ -737,11 +768,28 @@ function calculateOvertime(dateStr, clockInStr, clockOutStr) {
 }
 
 function getEmployee(id) {
-  return state.employees.find(e => e.id === id) || {
-    name: 'Karyawan',
+  if (!id) {
+    return {
+      id: '',
+      name: 'Karyawan',
+      department: '-',
+      position: '-',
+      nip: '-',
+      leaveQuota: { remaining: 12, total: 12, used: 0 }
+    };
+  }
+  const clean = String(id).trim().toLowerCase();
+  const found = state.employees.find(e =>
+    e.id.toLowerCase() === clean ||
+    (e.nip && String(e.nip).trim().toLowerCase() === clean) ||
+    (e.name && e.name.toLowerCase().trim() === clean)
+  );
+  return found || {
+    id: id,
+    name: id,
     department: '-',
     position: '-',
-    nip: '-',
+    nip: id,
     leaveQuota: { remaining: 12, total: 12, used: 0 }
   };
 }
@@ -1263,9 +1311,11 @@ function exportReportsToExcel() {
     return;
   }
 
-  const rangeLabel = state.reportFilter.range === '30days'
+  const rangeType = state.reportFilter.range || 'all';
+  const rangeLabel = rangeType === '30days'
     ? `30 Hari Terakhir (${getPastDateString(30)} s/d ${getTodayString()})`
-    : (state.reportFilter.range === 'month' ? `Bulan ${state.reportFilter.month}` : `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}`);
+    : (rangeType === 'month' ? `Bulan ${state.reportFilter.month}` : (rangeType === 'custom' ? `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}` : 'Semua Data'));
+  const searchNote = state.reportFilter.searchQuery ? ` | Filter: "${state.reportFilter.searchQuery}"` : '';
 
   // Format 1: Rekapitulasi Jam Lembur Per Karyawan (Per Orang)
   if (state.reportFilter.viewType === 'per-employee') {
@@ -1324,7 +1374,7 @@ function exportReportsToExcel() {
           <tr><td colspan="11" style="border-bottom: 2px solid #000000; height: 3px; padding: 0;"></td></tr>
           <tr><td colspan="11" style="height: 10px; border: none;"></td></tr>
           <tr><td colspan="11" class="bold" style="font-size: 13pt; text-align: center; color: #1e3a8a;">REKAPITULASI JAM LEMBUR KARYAWAN (PER ORANG)</td></tr>
-          <tr><td colspan="11" class="sub" style="text-align: center;">Periode: ${rangeLabel} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Karyawan: ${summaryList.length} Orang</td></tr>
+          <tr><td colspan="11" class="sub" style="text-align: center;">Periode: ${rangeLabel}${searchNote} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Karyawan: ${summaryList.length} Orang</td></tr>
           <tr><td colspan="11" class="sub" style="text-align: center;">Aturan Lembur: Senin-Jumat &gt;17:00 | Sabtu &gt;13:00 | Minggu Penuh (Kurang 45 mnt = 0 Jam, &ge; 45 mnt = 1 Jam)</td></tr>
           <tr><td colspan="11" style="height: 10px; border: none;"></td></tr>
           <tr>
@@ -1429,7 +1479,7 @@ function exportReportsToExcel() {
         <tr><td colspan="12" style="border-bottom: 2px solid #000000; height: 3px; padding: 0;"></td></tr>
         <tr><td colspan="12" style="height: 10px; border: none;"></td></tr>
         <tr><td colspan="12" class="bold" style="font-size: 13pt; text-align: center; color: #1e3a8a;">LAPORAN REKAPITULASI PRESENSI & JAM LEMBUR KARYAWAN</td></tr>
-        <tr><td colspan="12" class="sub" style="text-align: center;">Periode: ${rangeLabel} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Data: ${reports.length} Baris</td></tr>
+        <tr><td colspan="12" class="sub" style="text-align: center;">Periode: ${rangeLabel}${searchNote} | Dicetak: ${new Date().toLocaleString('id-ID')} | Total Data: ${reports.length} Baris</td></tr>
         <tr><td colspan="12" style="height: 10px; border: none;"></td></tr>
         <tr>
           <th>No</th>
@@ -1498,9 +1548,11 @@ function exportReportsToPDF() {
     return;
   }
 
-  const rangeLabel = state.reportFilter.range === '30days'
+  const rangeType = state.reportFilter.range || 'all';
+  const rangeLabel = rangeType === '30days'
     ? `30 Hari Terakhir (${getPastDateString(30)} s/d ${getTodayString()})`
-    : (state.reportFilter.range === 'month' ? `Bulan ${state.reportFilter.month}` : `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}`);
+    : (rangeType === 'month' ? `Bulan ${state.reportFilter.month}` : (rangeType === 'custom' ? `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}` : 'Semua Data'));
+  const searchNote = state.reportFilter.searchQuery ? ` | Filter: "${state.reportFilter.searchQuery}"` : '';
 
   const container = document.createElement('div');
   container.id = 'pdf-export-element';
@@ -1542,7 +1594,7 @@ function exportReportsToPDF() {
           <p style="font-size: 10px; color: #475569; margin: 2px 0 0 0;">Daftar akumulasi jam lembur resmi seluruh staf PT ANUGERAH BERKAH INDUSTRI</p>
         </div>
         <div style="text-align: right;">
-          <div style="font-size: 11px; font-weight: bold; color: #b45309;">Periode: ${rangeLabel}</div>
+          <div style="font-size: 11px; font-weight: bold; color: #b45309;">Periode: ${rangeLabel}${searchNote}</div>
           <div style="font-size: 9px; color: #64748b;">Dicetak: ${new Date().toLocaleString('id-ID')} WIB</div>
         </div>
       </div>
@@ -1676,7 +1728,7 @@ function exportReportsToPDF() {
         <p style="font-size: 10px; color: #475569; margin: 2px 0 0 0;">Log detail jam masuk, jam pulang, dan lembur harian staf</p>
       </div>
       <div style="text-align: right;">
-        <div style="font-size: 11px; font-weight: bold; color: #1d4ed8;">Periode: ${rangeLabel}</div>
+        <div style="font-size: 11px; font-weight: bold; color: #1d4ed8;">Periode: ${rangeLabel}${searchNote}</div>
         <div style="font-size: 9px; color: #64748b;">Dicetak: ${new Date().toLocaleString('id-ID')} WIB</div>
       </div>
     </div>
@@ -1829,23 +1881,26 @@ function importDatabaseJSON(file) {
 
 function getFilteredReports() {
   return state.attendances.filter(att => {
+    const attDate = normalizeDateStr(att.date);
+
     // 1. Filter Rentang Waktu (30 Hari, Bulan, Custom, Semua)
     if (state.reportFilter.range === '30days') {
       const past30 = getPastDateString(30);
-      const today = getTodayString();
-      if (att.date < past30 || att.date > today) return false;
+      if (attDate && attDate < past30) return false;
     } else if (state.reportFilter.range === 'month') {
-      if (state.reportFilter.month && !att.date.startsWith(state.reportFilter.month)) return false;
+      if (state.reportFilter.month && attDate && !attDate.startsWith(state.reportFilter.month)) return false;
     } else if (state.reportFilter.range === 'custom') {
-      if (state.reportFilter.startDate && att.date < state.reportFilter.startDate) return false;
-      if (state.reportFilter.endDate && att.date > state.reportFilter.endDate) return false;
+      if (state.reportFilter.startDate && attDate && attDate < state.reportFilter.startDate) return false;
+      if (state.reportFilter.endDate && attDate && attDate > state.reportFilter.endDate) return false;
     }
 
     // 2. Filter Karyawan
-    if (state.reportFilter.employeeId !== 'ALL' && att.employeeId !== state.reportFilter.employeeId) return false;
+    const emp = getEmployee(att.employeeId);
+    if (state.reportFilter.employeeId !== 'ALL') {
+      if (att.employeeId !== state.reportFilter.employeeId && emp.id !== state.reportFilter.employeeId) return false;
+    }
 
     // 3. Filter Departemen
-    const emp = getEmployee(att.employeeId);
     if (state.reportFilter.department !== 'ALL' && emp.department !== state.reportFilter.department) return false;
 
     // 4. Filter Status
@@ -1854,9 +1909,23 @@ function getFilteredReports() {
       if (state.reportFilter.status === 'Tepat Waktu' && att.clockInStatus !== 'Tepat Waktu') return false;
       if (state.reportFilter.status === 'Lembur') {
         const ot = calculateOvertime(att.date, att.clockIn, att.clockOut);
-        if (ot.hoursDecimal <= 0) return false;
+        const hasOt = ot.hoursDecimal > 0 || (att.overtimeDecimal && Number(att.overtimeDecimal) > 0) || (att.overtimeHours && att.overtimeHours !== '-' && att.overtimeHours !== '0 Jam');
+        if (!hasOt) return false;
       }
     }
+
+    // 5. Filter Search Query (Pencarian Nama / NIP / Dept / Jabatan / Tanggal)
+    if (state.reportFilter.searchQuery) {
+      const q = state.reportFilter.searchQuery.toLowerCase().trim();
+      const matchName = emp.name && emp.name.toLowerCase().includes(q);
+      const matchNip = emp.nip && String(emp.nip).toLowerCase().includes(q);
+      const matchDept = emp.department && emp.department.toLowerCase().includes(q);
+      const matchPos = emp.position && emp.position.toLowerCase().includes(q);
+      const matchDate = (att.date && String(att.date).toLowerCase().includes(q)) || (attDate && attDate.includes(q));
+      const matchDay = getDayNameIndonesian(att.date).toLowerCase().includes(q);
+      if (!matchName && !matchNip && !matchDept && !matchPos && !matchDate && !matchDay) return false;
+    }
+
     return true;
   });
 }
@@ -1870,6 +1939,15 @@ function getOvertimeSummaryPerEmployee(filteredAtts) {
   state.employees.forEach(emp => {
     if (state.reportFilter.department !== 'ALL' && emp.department !== state.reportFilter.department) return;
     if (state.reportFilter.employeeId !== 'ALL' && emp.id !== state.reportFilter.employeeId) return;
+
+    if (state.reportFilter.searchQuery) {
+      const q = state.reportFilter.searchQuery.toLowerCase().trim();
+      const matchName = emp.name && emp.name.toLowerCase().includes(q);
+      const matchNip = emp.nip && String(emp.nip).toLowerCase().includes(q);
+      const matchDept = emp.department && emp.department.toLowerCase().includes(q);
+      const matchPos = emp.position && emp.position.toLowerCase().includes(q);
+      if (!matchName && !matchNip && !matchDept && !matchPos) return;
+    }
 
     summaryMap[emp.id] = {
       employee: emp,
@@ -1885,9 +1963,19 @@ function getOvertimeSummaryPerEmployee(filteredAtts) {
 
   // Hitung total jam lembur per orang
   atts.forEach(att => {
-    if (!summaryMap[att.employeeId]) {
-      const emp = getEmployee(att.employeeId);
-      summaryMap[att.employeeId] = {
+    const emp = getEmployee(att.employeeId);
+    const targetKey = summaryMap[emp.id] ? emp.id : (summaryMap[att.employeeId] ? att.employeeId : null);
+
+    if (!targetKey && !summaryMap[emp.id]) {
+      if (state.reportFilter.searchQuery) {
+        const q = state.reportFilter.searchQuery.toLowerCase().trim();
+        const matchName = emp.name && emp.name.toLowerCase().includes(q);
+        const matchNip = emp.nip && String(emp.nip).toLowerCase().includes(q);
+        const matchDept = emp.department && emp.department.toLowerCase().includes(q);
+        if (!matchName && !matchNip && !matchDept) return;
+      }
+
+      summaryMap[emp.id] = {
         employee: emp,
         totalHadir: 0,
         totalOvertimeDays: 0,
@@ -1899,23 +1987,36 @@ function getOvertimeSummaryPerEmployee(filteredAtts) {
       };
     }
 
-    const s = summaryMap[att.employeeId];
+    const s = summaryMap[targetKey || emp.id];
+    if (!s) return;
+
     s.totalHadir++;
     s.records.push(att);
 
-    const ot = calculateOvertime(att.date, att.clockIn, att.clockOut);
-    if (ot.hoursDecimal > 0) {
-      s.totalOvertimeDays++;
-      s.totalOvertimeHours += ot.hoursDecimal;
+    let otHours = 0;
+    const calcOt = calculateOvertime(att.date, att.clockIn, att.clockOut);
+    if (calcOt.hoursDecimal > 0) {
+      otHours = calcOt.hoursDecimal;
+    } else if (att.overtimeDecimal && Number(att.overtimeDecimal) > 0) {
+      otHours = Number(att.overtimeDecimal);
+    } else if (att.overtimeHours && att.overtimeHours !== '-' && att.overtimeHours !== '0 Jam') {
+      const m = String(att.overtimeHours).match(/(\d+(\.\d+)?)/);
+      if (m) otHours = parseFloat(m[1]) || 0;
+    }
 
-      const d = new Date(att.date + 'T12:00:00');
+    if (otHours > 0) {
+      s.totalOvertimeDays++;
+      s.totalOvertimeHours += otHours;
+
+      const cleanDate = normalizeDateStr(att.date);
+      const d = new Date(cleanDate + 'T12:00:00');
       const day = d.getDay();
       if (day === 0) {
-        s.sundayOvertimeHours += ot.hoursDecimal;
+        s.sundayOvertimeHours += otHours;
       } else if (day === 6) {
-        s.saturdayOvertimeHours += ot.hoursDecimal;
+        s.saturdayOvertimeHours += otHours;
       } else {
-        s.weekdayOvertimeHours += ot.hoursDecimal;
+        s.weekdayOvertimeHours += otHours;
       }
     }
   });
@@ -3294,10 +3395,10 @@ function renderAdminReportsTab() {
   const reports = getFilteredReports();
   const departments = [...new Set(state.employees.map(e => e.department))];
   const currentView = state.reportFilter.viewType || 'per-employee';
-  const rangeType = state.reportFilter.range || '30days';
+  const rangeType = state.reportFilter.range || 'all';
   const rangeLabel = rangeType === '30days'
     ? `30 Hari Terakhir (${getPastDateString(30)} s/d ${getTodayString()})`
-    : (rangeType === 'month' ? `Bulan ${state.reportFilter.month}` : (rangeType === 'all' ? 'Semua Data' : `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}`));
+    : (rangeType === 'month' ? `Bulan ${state.reportFilter.month}` : (rangeType === 'custom' ? `${state.reportFilter.startDate || '-'} s/d ${state.reportFilter.endDate || '-'}` : 'Semua Data'));
 
   // Hitung KPI
   let totalOvertimeHours = 0;
@@ -3452,11 +3553,18 @@ function renderAdminReportsTab() {
               <input type="month" id="report-month-filter" value="${state.reportFilter.month}"
                 class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2 text-xs font-semibold">
             </div>
-          ` : `
+          ` : rangeType === '30days' ? `
             <div>
               <label class="block font-bold text-slate-700 mb-1">Rentang Tanggal Aktif</label>
               <div class="p-2 bg-blue-50 border border-blue-200 rounded-xl text-blue-900 font-semibold text-xs">
                 ${getPastDateString(30)} s/d ${getTodayString()}
+              </div>
+            </div>
+          ` : `
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Rentang Tanggal Aktif</label>
+              <div class="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 font-semibold text-xs flex items-center justify-between">
+                <span>Semua Riwayat Data (Tanpa Batas)</span>
               </div>
             </div>
           `}
@@ -3486,6 +3594,35 @@ function renderAdminReportsTab() {
               <option value="Lembur" ${state.reportFilter.status === 'Lembur' ? 'selected' : ''}>Ada Jam Lembur (>0 Jam)</option>
             </select>
           </div>
+        </div>
+
+        <!-- SEARCH BAR UTAMA LAPORAN -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2 border-t border-slate-100">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </div>
+            <input type="text" id="report-search-input" value="${escapeHtml(state.reportFilter.searchQuery || '')}"
+              placeholder="Cari nama karyawan, NIP, departemen, jabatan, atau tanggal..."
+              class="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+            ${state.reportFilter.searchQuery ? `
+              <button type="button" data-action="clear-report-search" title="Reset pencarian"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-rose-600 cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            ` : ''}
+          </div>
+          <button type="button" data-action="submit-report-search"
+            class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm shadow-indigo-600/20 cursor-pointer">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <span>Cari Data</span>
+          </button>
+          ${state.reportFilter.searchQuery ? `
+            <button type="button" data-action="clear-report-search"
+              class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer">
+              Reset
+            </button>
+          ` : ''}
         </div>
 
         <!-- Mode Tampilan: Rekapitulasi Lembur Per Orang vs Log Harian -->
@@ -3557,7 +3694,7 @@ function renderAdminReportsTab() {
             <img src="${getCompanyLetterhead()}" class="w-full max-h-24 object-contain mx-auto" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
             <div class="mt-2 flex justify-between items-center text-[10px] text-slate-700 font-bold border-b border-slate-300 pb-1">
               <span>REKAPITULASI JAM LEMBUR KARYAWAN (PER ORANG)</span>
-              <span>Periode: ${rangeLabel}</span>
+              <span>Periode: ${rangeLabel}${state.reportFilter.searchQuery ? ' (Filter: ' + escapeHtml(state.reportFilter.searchQuery) + ')' : ''}</span>
             </div>
           </div>
 
@@ -3568,13 +3705,28 @@ function renderAdminReportsTab() {
                   Tabel Utama Rekapitulasi
                 </span>
                 <span class="text-xs text-slate-400">Total ${summaryList.length} Karyawan</span>
+                ${state.reportFilter.searchQuery ? `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                    Filter: "${escapeHtml(state.reportFilter.searchQuery)}"
+                  </span>
+                ` : ''}
               </div>
               <h3 class="font-bold text-slate-800 text-base mt-1">Rekapitulasi Jam Lembur Per Orang (34 Karyawan PT ABI)</h3>
               <p class="text-xs text-slate-500">Diurutkan berdasarkan akumulasi jam lembur tertinggi. Klik "Lihat Log Harian" untuk memeriksa detail tanggal.</p>
             </div>
-            <div class="flex items-center gap-2">
-              <div class="text-xs font-bold text-amber-800 bg-amber-50 px-3.5 py-2 rounded-xl border border-amber-200">
-                Grand Total Lembur: <span class="font-black text-amber-900 text-sm">${grandTotalOtHours} Jam</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="relative">
+                <input type="text" id="table-search-ot" value="${escapeHtml(state.reportFilter.searchQuery || '')}"
+                  placeholder="Cari karyawan / NIP..."
+                  class="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </div>
+              <button type="button" data-action="submit-table-search-ot"
+                class="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs">
+                <span>Cari</span>
+              </button>
+              <div class="text-xs font-bold text-amber-800 bg-amber-50 px-3.5 py-1.5 rounded-xl border border-amber-200">
+                Grand Total: <span class="font-black text-amber-900 text-sm">${grandTotalOtHours} Jam</span>
               </div>
             </div>
           </div>
@@ -3679,7 +3831,7 @@ function renderAdminReportsTab() {
             <img src="${getCompanyLetterhead()}" class="w-full max-h-24 object-contain mx-auto" alt="Kop Surat PT. ANUGERAH BERKAH INDUSTRI">
             <div class="mt-2 flex justify-between items-center text-[10px] text-slate-700 font-bold border-b border-slate-300 pb-1">
               <span>LAPORAN RINCIAN PRESENSI & JAM KERJA HARIAN</span>
-              <span>Periode: ${rangeLabel}</span>
+              <span>Periode: ${rangeLabel}${state.reportFilter.searchQuery ? ' (Filter: ' + escapeHtml(state.reportFilter.searchQuery) + ')' : ''}</span>
             </div>
           </div>
 
@@ -3690,11 +3842,26 @@ function renderAdminReportsTab() {
                   Log Detail Harian
                 </span>
                 <span class="text-xs text-slate-400">Total ${reports.length} Baris Log</span>
+                ${state.reportFilter.searchQuery ? `
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                    Filter: "${escapeHtml(state.reportFilter.searchQuery)}"
+                  </span>
+                ` : ''}
               </div>
               <h3 class="font-bold text-slate-800 text-base mt-1">Rincian Presensi & Jam Lembur Harian</h3>
               <p class="text-xs text-slate-400">Log kehadiran lengkap dengan jam masuk, pulang, durasi, lembur, foto, dan lokasi GPS</p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="relative">
+                <input type="text" id="table-search-daily" value="${escapeHtml(state.reportFilter.searchQuery || '')}"
+                  placeholder="Cari nama, NIP, tanggal..."
+                  class="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              </div>
+              <button type="button" data-action="submit-table-search-daily"
+                class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center space-x-1 cursor-pointer shadow-xs">
+                <span>Cari</span>
+              </button>
               <button type="button" data-action="set-report-view" data-view="per-employee"
                 class="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 cursor-pointer">
                 ⬅ Kembali ke Rekap Lembur Per Orang
@@ -4340,6 +4507,29 @@ function setupEventListeners() {
         renderApp();
         break;
       }
+      case 'submit-report-search': {
+        const inp = document.getElementById('report-search-input');
+        state.reportFilter.searchQuery = inp ? inp.value.trim() : '';
+        renderApp();
+        break;
+      }
+      case 'submit-table-search-ot': {
+        const inp = document.getElementById('table-search-ot');
+        state.reportFilter.searchQuery = inp ? inp.value.trim() : '';
+        renderApp();
+        break;
+      }
+      case 'submit-table-search-daily': {
+        const inp = document.getElementById('table-search-daily');
+        state.reportFilter.searchQuery = inp ? inp.value.trim() : '';
+        renderApp();
+        break;
+      }
+      case 'clear-report-search': {
+        state.reportFilter.searchQuery = '';
+        renderApp();
+        break;
+      }
       case 'print-report': {
         exportReportsToPDF();
         break;
@@ -4465,6 +4655,18 @@ function setupEventListeners() {
     if (e.target && e.target.id === 'report-status-filter') {
       state.reportFilter.status = e.target.value;
       renderApp();
+    }
+  });
+
+  // Global Keydown Delegator (Enter to Search)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const activeId = e.target ? e.target.id : '';
+      if (['report-search-input', 'table-search-ot', 'table-search-daily'].includes(activeId)) {
+        e.preventDefault();
+        state.reportFilter.searchQuery = e.target.value.trim();
+        renderApp();
+      }
     }
   });
 

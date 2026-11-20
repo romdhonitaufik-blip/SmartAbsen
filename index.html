@@ -209,9 +209,9 @@
       }
 
       // Muat dummy-data.js terlebih dahulu, kemudian app.js
-      loadScript('dummy-data.js?v=20261120_v1', 'assets/js/dummy-data.js?v=20261120_v1')
+      loadScript('dummy-data.js?v=20261120_v2', 'assets/js/dummy-data.js?v=20261120_v2')
         .then(function () {
-          return loadScript('app.js?v=20261120_v1', 'assets/js/app.js?v=20261120_v1');
+          return loadScript('app.js?v=20261120_v2', 'assets/js/app.js?v=20261120_v2');
         })
         .catch(function (err) {
           console.error('[SmartAbsen Fatal]', err);
